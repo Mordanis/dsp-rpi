@@ -1,74 +1,12 @@
 extern crate num;
 extern crate rustfft;
 extern crate hound;
-use std::sync::Arc;
-use num::Complex;
-use rustfft::{FftPlanner, num_complex, Fft};
 
 use std::fs::File;
 use std::io::prelude::*;
 
 mod read_kernel;
-
-struct Convolver {
-    kernel_fourier: Vec<num_complex::Complex64>,
-    fft: Arc<dyn Fft<f64>>,
-    ift: Arc<dyn Fft<f64>>,
-    scratch:Vec<Complex<f64>>
-}
-
-impl Convolver {
-    pub fn new(kernel: Vec<f32>) -> Self {
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(kernel.len());
-        let ift = planner.plan_fft_inverse(kernel.len());
-
-        let norm_factor = 1f32 / (kernel.len() as f32).sqrt(); 
-        let mut kernel_complex: Vec<num_complex::Complex64> = kernel
-            .iter()
-            .map(|x| num_complex::Complex64::new((*x as f64) * norm_factor as f64, 0.0))
-            .collect::<Vec<num_complex::Complex64>>();
-
-
-        fft.process(&mut kernel_complex);
-
-        let scratch: Vec<Complex<f64>> = vec![Complex::new(0.0, 0.0); kernel.len()];
-
-        Convolver {
-            kernel_fourier: kernel_complex,
-            fft,
-            ift,
-            scratch
-        }
-    }
-
-    pub fn conv_with_kernel(&mut self, sample: Vec<f32>) -> Vec<f32> {
-        let mut sample_complex: Vec<num_complex::Complex64> = sample
-            .into_iter()
-            .map(|x| num_complex::Complex64::new(x as f64, 0.0))
-            .collect::<Vec<num_complex::Complex64>>();
-
-        self.fft.process_with_scratch(&mut sample_complex[..], &mut self.scratch[..]);
-
-        let mut conved: Vec<num_complex::Complex64> = Vec::with_capacity(sample_complex.len());
-        for i in 0..sample_complex.len() {
-            let val = sample_complex[i] * self.kernel_fourier[i];
-            conved.push(val);
-        }
-
-        println!("first 10 of conved are {:?}", conved[..10].to_vec());
-        println!("first 10 of inp are {:?}", sample_complex[..10].to_vec());
-
-        let norm_factor = 1.0 / (conved.len() as f32);
-        self.ift.process(&mut conved);
-        conved
-            .into_iter()
-            .map(|x| x.re as f32 * norm_factor as f32)
-            .collect::<Vec<f32>>()
-
-   }
-}
-
+mod conv;
 
 fn main() {
     let mut reader = hound::WavReader::open("./apology.wav").unwrap();
@@ -107,14 +45,14 @@ fn main() {
     let _res = write!(file, "{:?}", &kernel);
     let first_sample = samples[2205000..2205000 + &kernel.len()].to_vec();
 
-    let mut convolver = Convolver::new(kernel);
+    let mut convolver = conv::Convolver::new(kernel);
 
     let mut file = File::create("original.dat").unwrap();
     let contents = format!("{:?}", first_sample);
     let _res = write!(file, "{}", contents);
     let start = std::time::Instant::now();
     let mut out;
-    for i in 0..20 {
+    for i in 0..40 {
         out = convolver.conv_with_kernel(first_sample.clone());
         if i == 0 {
             let mut file = File::create("conved.dat").unwrap();
@@ -124,5 +62,6 @@ fn main() {
     }
     let elapsed = start.elapsed();
     println!("{:?} us elapsed", elapsed.as_micros());
+    println!("{:?} us per 0.5s sample", elapsed.as_micros() as f32 / 40.0);
     println!("Hello, world!");
 }

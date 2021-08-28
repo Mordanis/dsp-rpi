@@ -1,5 +1,6 @@
 /target
-*.data
+*.dat
 *.flac
 *.wav
 *~
+*.json

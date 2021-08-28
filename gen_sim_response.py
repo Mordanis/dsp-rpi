@@ -10,9 +10,10 @@ plot.plot(f_sim)
 plot.show()
 
 corrector = 1 / f_sim
-corrector = np.clip(corrector, 0, 2)
-plot.plot(corrector)
-plot.show()
+corrector = np.clip(corrector, 0, 30)
+corrector /= np.sum(corrector ** 2)
+# plot.plot(corrector)
+# plot.show()
 
 
 out = {
