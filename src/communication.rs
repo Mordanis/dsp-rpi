@@ -3,22 +3,24 @@ use std::thread;
 use std::time;
 use std::sync::{Arc, Mutex};
 
-struct VecContainer {
+
+pub struct VecContainer {
     data: Arc<Mutex<Vec<f32>>>
 }
 
 impl VecContainer {
-    fn new() -> Self {
+    pub fn new() -> Self {
         VecContainer { 
             data: Arc::new(Mutex::new(Vec::new()))
         }
     }
 
-    fn feed_data(&mut self, sink: mpsc::Receiver<Vec<f32>>) {
+    pub fn feed_data(&mut self, sink: mpsc::Receiver<Vec<f32>>) {
         let feeder_data = Arc::clone(&mut self.data);
         thread::spawn(
             move || {
-                let duration = time::Duration::from_secs_f32(1.0 / 44100.0);
+                let sr = super::constants::SAMPLE_RATE;
+                let duration = time::Duration::from_secs_f32(sr);
                 loop {
                     thread::sleep(duration);
                     {
@@ -36,18 +38,19 @@ impl VecContainer {
         );
     }
 
-    fn trim_data(&mut self) {
+    pub fn trim_data(&mut self) {
         let trim_data = Arc::clone(&mut self.data);
         thread::spawn(
             move || {
-                let duration = time::Duration::from_millis(10);
+                let duration = super::constants::SYNC_DURATION;
+                let mbs = super::constants::MAX_BUFFER_SIZE;
                 loop {
                     thread::sleep(duration);
                     {
                         let mut local_data = trim_data.lock().unwrap();
                         let num_elems = local_data.len();
-                        if num_elems > 500 {
-                            let start_idx = num_elems - 500;
+                        if num_elems > mbs {
+                            let start_idx = num_elems - mbs;
                             local_data.drain(..start_idx);
                        }
                     }
@@ -56,13 +59,15 @@ impl VecContainer {
         );
     }
 
-    fn get_data(&self) -> Vec<f32> {
+    pub fn get_data(&self) -> Vec<f32> {
         let data_local = Arc::clone(&self.data);
         let data = data_local.lock().unwrap();
         data.clone()
     }
 }
 
+
+#[test]
 fn test_comm() {
     let mut vec_container = VecContainer::new();
     let sink = externally_create_data();

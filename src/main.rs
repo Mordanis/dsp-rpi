@@ -7,6 +7,8 @@ use std::io::prelude::*;
 
 mod read_kernel;
 mod conv;
+mod constants;
+mod communication;
 
 fn main() {
     let mut reader = hound::WavReader::open("./apology.wav").unwrap();
