@@ -50,6 +50,9 @@ Start:
     s' = ifft(s'_f)
 ```
 
+Note that all corrections will likely have to be clipped to a reasonable range
+so that the DSP doesn't just make things crazy quiet and bassy.
+
 ### 5. Writing processed signal to system sound ###
 
 TODO mostly, I have some stuff laying around using https://github.com/RustAudio/cpal
