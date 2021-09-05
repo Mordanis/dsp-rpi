@@ -4,13 +4,13 @@ use std::time;
 use std::sync::{Arc, Mutex};
 
 
-pub struct VecContainer {
+pub struct AudioBuffer {
     data: Arc<Mutex<Vec<f32>>>
 }
 
-impl VecContainer {
+impl AudioBuffer {
     pub fn new() -> Self {
-        VecContainer { 
+        AudioBuffer { 
             data: Arc::new(Mutex::new(Vec::new()))
         }
     }
@@ -69,7 +69,7 @@ impl VecContainer {
 
 #[test]
 fn test_comm() {
-    let mut vec_container = VecContainer::new();
+    let mut vec_container = AudioBuffer::new();
     let sink = externally_create_data();
     vec_container.feed_data(sink);
     vec_container.trim_data();
@@ -85,11 +85,10 @@ fn externally_create_data() -> mpsc::Receiver<Vec<f32>> {
     thread::spawn(
         move || {
             let mut out = Vec::new();
-            out.push(0.0);
-            out.push(1.0);
-            out.push(2.0);
-            out.push(3.0);
-            out.push(4.0);
+            for i in 0..128 {
+                let val = (i % 2) * 36 * (i % 36);
+                out.push(val as f32);
+            }
             let duration = time::Duration::from_secs_f32(5.0 / 44100.0);
             loop {
                 let _res = source.send(out.clone());
