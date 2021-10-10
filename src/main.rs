@@ -9,8 +9,49 @@ mod read_kernel;
 mod conv;
 mod constants;
 mod communication;
+mod listen;
+
+use std::sync::mpsc;
+use cpal::traits::{DeviceTrait, StreamTrait};
 
 fn main() {
+
+    let host = listen::create_host();
+    let device = listen::create_device(host);
+    let listen_config = listen::create_listener_config(&device);
+    let output_config = listen::create_output_config(&device);
+    let (sender, receiver) = mpsc::channel();
+    println!("building input stream");
+    let input_stream = device.build_input_stream(
+        &listen_config.into(),
+        move |data: &[f32], _cb: &cpal::InputCallbackInfo| {
+            sender.send(data.to_vec()).unwrap();
+        },
+        |err| eprintln!("got error {}", err)
+    ).unwrap();
+    let output_stream = device.build_output_stream(
+        &output_config.into(),
+        move |data: &mut [f32], _cb: &cpal::OutputCallbackInfo| {
+            let received = match receiver.recv() {
+                Ok(samples) => samples,
+                Err(_) => Vec::new()
+            };
+            let mut recv_iter = received.iter();
+            for output_sample in data.iter_mut() {
+                let next = match recv_iter.next() {
+                    Some(s) => s,
+                    None => break
+                };
+                *output_sample = *next;
+            }
+        },
+        |err| eprintln!("got error in writing to stream\n{}", err)
+        ).unwrap();
+
+    input_stream.play().unwrap();
+    output_stream.play().unwrap();
+
+
     let mut reader = hound::WavReader::open("./apology.wav").unwrap();
     let data = reader.samples::<i32>();
     let data = data

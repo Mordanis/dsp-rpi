@@ -2,16 +2,19 @@ use std::sync::mpsc;
 use std::thread;
 use std::time;
 use std::sync::{Arc, Mutex};
+use cpal;
 
 
 pub struct AudioBuffer {
-    data: Arc<Mutex<Vec<f32>>>
+    data: Arc<Mutex<Vec<f32>>>,
+    stream: Option<cpal::Stream>
 }
 
 impl AudioBuffer {
     pub fn new() -> Self {
         AudioBuffer { 
-            data: Arc::new(Mutex::new(Vec::new()))
+            data: Arc::new(Mutex::new(Vec::new())),
+            stream: None
         }
     }
 
@@ -64,37 +67,47 @@ impl AudioBuffer {
         let data = data_local.lock().unwrap();
         data.clone()
     }
+
+    /// Exists so we can create a buffer in a function and return
+    /// it without the stream going out of scope and being removed
+    pub fn give_stream(&mut self, stream: cpal::Stream) {
+        self.stream = Some(stream);
+    }
 }
 
 
-#[test]
-fn test_comm() {
-    let mut vec_container = AudioBuffer::new();
-    let sink = externally_create_data();
-    vec_container.feed_data(sink);
-    vec_container.trim_data();
-    let duration = time::Duration::from_secs(20);
-    thread::sleep(duration);
-    println!("Hello, world!");
-    println!("data size is: {}", vec_container.get_data().len());
-    println!("data is: {:?}", vec_container.get_data());
-}
+#[cfg(test)]
+mod tests {
 
-fn externally_create_data() -> mpsc::Receiver<Vec<f32>> {
-    let (source, sink) = mpsc::channel();
-    thread::spawn(
-        move || {
-            let mut out = Vec::new();
-            for i in 0..128 {
-                let val = (i % 2) * 36 * (i % 36);
-                out.push(val as f32);
+    #[test]
+    fn test_comm() {
+        let mut vec_container = super::AudioBuffer::new();
+        let sink = externally_create_data();
+        vec_container.feed_data(sink);
+        vec_container.trim_data();
+        let duration = std::time::Duration::from_secs(2);
+        std::thread::sleep(duration);
+        println!("Hello, world!");
+        println!("data size is: {}", vec_container.get_data().len());
+        println!("data is: {:?}", vec_container.get_data());
+    }
+
+    fn externally_create_data() -> std::sync::mpsc::Receiver<Vec<f32>> {
+        let (source, sink) = std::sync::mpsc::channel();
+        std::thread::spawn(
+            move || {
+                let mut out = Vec::new();
+                for i in 0..128 {
+                    let val = (i % 2) * 36 * (i % 36);
+                    out.push(val as f32);
+                }
+                let duration = std::time::Duration::from_secs_f32(5.0 / 44100.0);
+                loop {
+                    let _res = source.send(out.clone());
+                    std::thread::sleep(duration);
+                }
             }
-            let duration = time::Duration::from_secs_f32(5.0 / 44100.0);
-            loop {
-                let _res = source.send(out.clone());
-                thread::sleep(duration);
-            }
-        }
-    );
-    sink
+        );
+        sink
+    }
 }
